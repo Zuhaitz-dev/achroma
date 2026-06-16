@@ -10,6 +10,7 @@ class QLineEdit;
 class QLabel;
 class QCompleter;
 class QWidget;
+class PermissionBar;
 struct AppConfig;
 
 class BrowserTabs : public QObject
@@ -82,6 +83,7 @@ signals:
     void findBarVisibilityChanged(bool visible);
     void statusMessage(const QString& msg);
     void titleChanged(const QString& title);
+    void audibleChanged(bool audible);
 
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
@@ -92,6 +94,9 @@ private:
     void setUrlBarClean(const QUrl& url);
     void shiftTabIndices(int removedIdx);
     void adjustPinsForTabMove(int from, int to);
+    bool hasAudibleTab() const;
+    bool renderMarkdownFile(QWebEngineView* view, const QString& path) const;
+    bool openLocalMarkdown(QWebEngineView* view, const QUrl& url) const;
 
     QTabWidget* m_tabs = nullptr;
     QLineEdit* m_urlBar = nullptr;
@@ -103,6 +108,7 @@ private:
     bool m_findCase = false;
     bool m_findHighlight = false;
     QWidget* m_bookmarkBar = nullptr;
+    PermissionBar* m_permissionBar = nullptr;
     QUrl m_lastClosedUrl;
     QList<QUrl> m_closedTabStack;
     QStringList m_history;

@@ -10,6 +10,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QDateTime>
+#include <QDialog>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -24,10 +25,10 @@
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPointer>
 #include <QProcess>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QResizeEvent>
 #include <QScrollArea>
@@ -244,7 +245,21 @@ void AchromaWindow::setupUi()
     auto* tbRightSpacer = new QWidget(m_titleBar);
     tbRightSpacer->setFixedWidth(74);
     tbRightSpacer->setStyleSheet("background: transparent; border: none;");
+    auto* audioLayout = new QHBoxLayout(tbRightSpacer);
+    audioLayout->setContentsMargins(8, 0, 14, 0);
+    audioLayout->setSpacing(0);
+    m_audioIndicator = new QLabel(tbRightSpacer);
+    m_audioIndicator->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_audioIndicator->setFixedWidth(52);
+    m_audioIndicator->setStyleSheet(
+        "color: #303030; font-family: monospace; font-size: 10px; letter-spacing: 1px; border: none;"
+    );
+    audioLayout->addWidget(m_audioIndicator);
     tbLayout->addWidget(tbRightSpacer);
+
+    m_audioTimer = new QTimer(this);
+    m_audioTimer->setInterval(180);
+    connect(m_audioTimer, &QTimer::timeout, this, &AchromaWindow::tickTitleAudioIndicator);
 
     connect(closeBtn, &QToolButton::clicked, this, &AchromaWindow::close);
     connect(minBtn, &QToolButton::clicked, this, &AchromaWindow::showMinimized);
@@ -332,7 +347,7 @@ void AchromaWindow::setupUi()
 
     m_dispatcher->fuzzyCallback = [this]()
     {
-        m_finder->open();
+        m_finder->toggle();
     };
 
     const AppConfig& cfg = m_dispatcher->appearance();
@@ -348,7 +363,7 @@ void AchromaWindow::setupUi()
 
     if (!cfg.qssFile.isEmpty())
     {
-        QString themesDir = QDir::homePath() + "/.config/achroma/themes";
+        QString themesDir = Achroma::configDir() + "/themes";
         QDir().mkpath(themesDir);
         QString fullPath = QDir::cleanPath(cfg.qssFile.startsWith('/') ? cfg.qssFile : themesDir + "/" + cfg.qssFile);
         QString canonical = QFileInfo(fullPath).canonicalFilePath();
@@ -370,223 +385,17 @@ void AchromaWindow::setupUi()
         m_dispatcher,
         &CommandDispatcher::configChanged,
         this,
-        [this]() { m_triggers->setTriggers(m_dispatcher->triggers()); }
+        [this]()
+        {
+            m_triggers->setTriggers(m_dispatcher->triggers());
+            setupHelpOverlay();
+        }
     );
 
     m_terminal->start();
     qApp->installEventFilter(this);
 
-    m_helpFrame = new QFrame(m_central);
-    m_helpFrame->setStyleSheet("QFrame { background-color: rgba(0, 0, 0, 220); }");
-
-    auto* helpOuter = new QVBoxLayout(m_helpFrame);
-    helpOuter->setAlignment(Qt::AlignCenter);
-    helpOuter->setContentsMargins(24, 28, 24, 28);
-
-    auto* scroll = new QScrollArea();
-    scroll->setWidgetResizable(true);
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setMaximumWidth(920);
-    scroll->setStyleSheet(
-        "QScrollArea { background: #070707; border: 1px solid #181818; }"
-        "QScrollBar:vertical { width: 4px; background: #070707; margin: 0; }"
-        "QScrollBar::handle:vertical { background: #252525; border-radius: 2px; min-height: 24px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-    );
-    helpOuter->addWidget(scroll);
-
-    auto* content = new QWidget();
-    content->setStyleSheet(
-        "QWidget { background: #070707; }"
-        "QLabel  { border: none; color: #555; font-family: monospace; font-size: 11px; }"
-    );
-
-    auto* vbox = new QVBoxLayout(content);
-    vbox->setContentsMargins(28, 22, 28, 20);
-    vbox->setSpacing(0);
-
-    auto* helpLogo = new QLabel(content);
-    QPixmap helpPix(":/achroma.svg");
-    if (!helpPix.isNull())
-        helpLogo->setPixmap(helpPix.scaled(42, 42, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    helpLogo->setAlignment(Qt::AlignCenter);
-    helpLogo->setStyleSheet("padding-bottom: 10px; padding-top: 4px;");
-    vbox->addWidget(helpLogo);
-
-    auto* helpTitle = new QLabel("A C H R O M A");
-    helpTitle->setAlignment(Qt::AlignCenter);
-    helpTitle->setStyleSheet(
-        "color: #eee; font-size: 15px; font-weight: bold; "
-        "letter-spacing: 8px; font-family: monospace; padding-bottom: 3px;"
-    );
-    vbox->addWidget(helpTitle);
-
-    auto* helpSub = new QLabel("keyboard  &  command  reference");
-    helpSub->setAlignment(Qt::AlignCenter);
-    helpSub->setStyleSheet(
-        "color: #555; font-size: 10px; letter-spacing: 2px; "
-        "font-family: monospace; padding-bottom: 14px;"
-    );
-    vbox->addWidget(helpSub);
-
-    auto* topSep = new QFrame(content);
-    topSep->setFrameShape(QFrame::HLine);
-    topSep->setStyleSheet("QFrame { color: #111; }");
-    vbox->addWidget(topSep);
-
-    const KeyConfig& kcfg = m_dispatcher->keyConfig();
-
-    auto makeKey = [content](const QString& text)
-    {
-        auto* l = new QLabel(text, content);
-        l->setStyleSheet(
-            "color: #ccc; background: #0e0e0e; border: 1px solid #2a2a2a; "
-            "border-radius: 2px; padding: 1px 7px; "
-            "font-size: 11px; font-family: monospace;"
-        );
-        l->setFixedWidth(192);
-        l->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        return l;
-    };
-    auto makeDesc = [content](const QString& text)
-    {
-        auto* l = new QLabel(text, content);
-        l->setStyleSheet("color: #888; font-size: 11px; font-family: monospace;");
-        return l;
-    };
-
-    using Entry = QPair<QString, QString>;
-    auto addSection = [&](const QString& heading, const QVector<Entry>& entries)
-    {
-        auto* hdr = new QLabel(heading, content);
-        hdr->setStyleSheet(
-            "color: #555; font-size: 9px; letter-spacing: 4px; "
-            "font-family: monospace; padding-top: 20px; padding-bottom: 6px;"
-        );
-        vbox->addWidget(hdr);
-
-        auto* grid = new QGridLayout();
-        grid->setContentsMargins(0, 0, 0, 0);
-        grid->setVerticalSpacing(4);
-        grid->setHorizontalSpacing(10);
-        grid->setColumnStretch(1, 1);
-        grid->setColumnStretch(3, 1);
-        grid->setColumnMinimumWidth(2, 18);
-
-        int half = (entries.size() + 1) / 2;
-        for (int i = 0; i < entries.size(); i++)
-        {
-            int col = (i < half) ? 0 : 2;
-            int row = (i < half) ? i : (i - half);
-            grid->addWidget(makeKey(entries[i].first), row, col);
-            grid->addWidget(makeDesc(entries[i].second), row, col + 1);
-        }
-
-        auto* gw = new QWidget(content);
-        gw->setLayout(grid);
-        vbox->addWidget(gw);
-    };
-
-    addSection(
-        "NAVIGATION",
-        {
-            {":open  :o <url>", "Navigate current tab"},
-            {":tab   :t <url>", "Open in new tab"},
-            {":close :c", "Close current tab"},
-            {":back  :b", "Go back"},
-            {":forward :f", "Go forward"},
-            {":r", "Reload page"},
-            {":home", "Go to home dashboard"},
-            {":undo  :u", "Reopen closed tab"},
-            {":next  :n", "Next tab"},
-            {":prev  :p", "Previous tab"},
-            {":duplicate", "Duplicate current tab"},
-            {":incognito", "New incognito tab"},
-        }
-    );
-
-    addSection(
-        "SEARCH",
-        {
-            {":s <query>", "DuckDuckGo search"},
-            {"g <query>", "Google"},
-            {"w <query>", "Wikipedia"},
-            {"yt <query>", "YouTube"},
-            {"gh <query>", "GitHub"},
-            {":bookmark :bm <n>", "Bookmark current page"},
-        }
-    );
-
-    addSection(
-        "KEYBOARD",
-        {
-            {kcfg.nextTab, "Next tab"},
-            {kcfg.prevTab, "Previous tab"},
-            {kcfg.reopenClosedTab, "Reopen closed tab"},
-            {kcfg.focusUrlbar, "Focus URL bar"},
-            {kcfg.focusTerminal, "Focus terminal"},
-            {kcfg.findInPage, "Find in page"},
-            {kcfg.linkHints, "Link hints overlay"},
-            {kcfg.fuzzyFinder, "Fuzzy file / tab finder"},
-            {kcfg.toggleReader, "Toggle reader mode"},
-            {kcfg.toggleDarkMode, "Toggle dark mode"},
-            {kcfg.toggleAdBlock, "Toggle ad blocking"},
-            {kcfg.fullscreen, "Toggle fullscreen"},
-            {kcfg.showHelp, "This window"},
-        }
-    );
-
-    addSection(
-        "TERMINAL",
-        {
-            {kcfg.toggleTerminal, "Toggle terminal"},
-            {kcfg.terminalCopy, "Copy selection"},
-            {kcfg.terminalPaste, "Paste"},
-            {kcfg.terminalClear, "Clear"},
-            {kcfg.terminalZoomIn, "Zoom in"},
-            {kcfg.terminalZoomOut, "Zoom out"},
-            {kcfg.terminalZoomReset, "Reset zoom"},
-            {kcfg.sendToTerm, "Send selection to terminal"},
-            {kcfg.codeBlock, "Extract code block"},
-            {kcfg.installCmd, "Find install command"},
-        }
-    );
-
-    addSection(
-        "TOOLS",
-        {
-            {kcfg.devTools, "Developer tools"},
-            {kcfg.viewSource, "View page source"},
-            {kcfg.printPage, "Print / save as PDF"},
-            {kcfg.toggleBmbar, "Toggle bookmark bar"},
-            {":pipe <cmd>", "Run command, show output in tab"},
-            {":reader", "Toggle reader mode"},
-            {":dark / :light", "Toggle dark mode"},
-            {":adblock", "Toggle ad blocking"},
-            {":session save/load/list", "Session management"},
-            {":history", "Recent URLs"},
-            {":reload", "Reload config.json"},
-        }
-    );
-
-    vbox->addStretch();
-
-    auto* footerSep = new QFrame(content);
-    footerSep->setFrameShape(QFrame::HLine);
-    footerSep->setStyleSheet("QFrame { color: #111; margin-top: 12px; }");
-    vbox->addWidget(footerSep);
-
-    auto* footer = new QLabel("ESC  to close", content);
-    footer->setAlignment(Qt::AlignCenter);
-    footer->setStyleSheet(
-        "color: #444; font-size: 10px; letter-spacing: 3px; "
-        "font-family: monospace; padding: 10px 0 6px 0;"
-    );
-    vbox->addWidget(footer);
-
-    scroll->setWidget(content);
-    m_helpFrame->hide();
+    setupHelpOverlay();
 
     m_finder = new FuzzyFinder(m_central);
     m_finder->setBrowser(m_browser);
@@ -624,6 +433,8 @@ void AchromaWindow::setupUi()
         }
     );
 
+    connect(m_browser, &BrowserTabs::audibleChanged, this, &AchromaWindow::setTitleAudioActive);
+
     connect(
         m_browser->tabWidget(),
         &QTabWidget::currentChanged,
@@ -641,13 +452,13 @@ void AchromaWindow::setupUi()
     m_ipc->setDispatcher(m_dispatcher);
     m_ipc->setBrowser(m_browser);
     m_ipc->setTerminal(m_terminal);
-    QString sockPath = QDir::homePath() + "/.local/share/achroma/achroma.sock";
+    QString sockPath = Achroma::dataDir() + "/achroma.sock";
     QDir().mkpath(QFileInfo(sockPath).absolutePath());
     if (!m_ipc->start(sockPath))
         setStatus("IPC socket failed — CLI commands unavailable", 0);
 
     m_adBlocker = new AdBlockInterceptor(this);
-    QString blocklistPath = QDir::homePath() + "/.config/achroma/blocklist.txt";
+    QString blocklistPath = Achroma::configDir() + "/blocklist.txt";
     m_adBlocker->loadBlocklist(blocklistPath);
     QWebEngineProfile::defaultProfile()->setUrlRequestInterceptor(m_adBlocker);
     QWebEngineProfile::defaultProfile()->setSpellCheckEnabled(true);
@@ -883,7 +694,7 @@ void AchromaWindow::setupShortcuts()
             }
             if (m_finder->isVisible())
             {
-                m_finder->hide();
+                m_finder->closeFinder();
                 return;
             }
             if (m_browser)
@@ -892,7 +703,10 @@ void AchromaWindow::setupShortcuts()
     );
 
     connect(
-        new QShortcut(QKeySequence(keys.fuzzyFinder), this), &QShortcut::activated, this, [this]() { m_finder->open(); }
+        new QShortcut(QKeySequence(keys.fuzzyFinder), this),
+        &QShortcut::activated,
+        this,
+        [this]() { m_finder->toggle(); }
     );
 
     connect(
@@ -1165,6 +979,10 @@ void AchromaWindow::onUrlBarReturnPressed()
         {
             m_dispatcher->execute(words[0] + " " + words.mid(1).join(' '));
         }
+        else if (input.endsWith(".md", Qt::CaseInsensitive) || input.endsWith(".markdown", Qt::CaseInsensitive))
+        {
+            m_dispatcher->execute("md " + input);
+        }
         else
         {
             QWebEngineView* v = m_browser->currentView();
@@ -1176,6 +994,248 @@ void AchromaWindow::onUrlBarReturnPressed()
     }
     m_browser->urlBar()->clearFocus();
     m_browser->urlBar()->clear();
+}
+
+void AchromaWindow::setupHelpOverlay()
+{
+    const bool wasVisible = m_helpFrame && m_helpFrame->isVisible();
+    if (m_helpFrame)
+    {
+        m_helpFrame->deleteLater();
+        m_helpFrame = nullptr;
+    }
+
+    m_helpFrame = new QFrame(m_central);
+    m_helpFrame->setStyleSheet("QFrame { background-color: rgba(0, 0, 0, 220); }");
+
+    auto* helpOuter = new QVBoxLayout(m_helpFrame);
+    helpOuter->setAlignment(Qt::AlignCenter);
+    helpOuter->setContentsMargins(24, 28, 24, 28);
+
+    auto* scroll = new QScrollArea();
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setMaximumWidth(920);
+    scroll->setStyleSheet(
+        "QScrollArea { background: #070707; border: 1px solid #181818; }"
+        "QScrollBar:vertical { width: 4px; background: #070707; margin: 0; }"
+        "QScrollBar::handle:vertical { background: #252525; border-radius: 2px; min-height: 24px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+    );
+    helpOuter->addWidget(scroll);
+
+    auto* content = new QWidget();
+    content->setStyleSheet(
+        "QWidget { background: #070707; }"
+        "QLabel  { border: none; color: #555; font-family: monospace; font-size: 11px; }"
+    );
+
+    auto* vbox = new QVBoxLayout(content);
+    vbox->setContentsMargins(28, 22, 28, 20);
+    vbox->setSpacing(0);
+
+    auto* helpLogo = new QLabel(content);
+    QPixmap helpPix(":/achroma.svg");
+    if (!helpPix.isNull())
+        helpLogo->setPixmap(helpPix.scaled(42, 42, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    helpLogo->setAlignment(Qt::AlignCenter);
+    helpLogo->setStyleSheet("padding-bottom: 10px; padding-top: 4px;");
+    vbox->addWidget(helpLogo);
+
+    auto* helpTitle = new QLabel("A C H R O M A");
+    helpTitle->setAlignment(Qt::AlignCenter);
+    helpTitle->setStyleSheet(
+        "color: #eee; font-size: 15px; font-weight: bold; "
+        "letter-spacing: 8px; font-family: monospace; padding-bottom: 3px;"
+    );
+    vbox->addWidget(helpTitle);
+
+    auto* helpSub = new QLabel("keyboard  &  command  reference");
+    helpSub->setAlignment(Qt::AlignCenter);
+    helpSub->setStyleSheet(
+        "color: #555; font-size: 10px; letter-spacing: 2px; "
+        "font-family: monospace; padding-bottom: 14px;"
+    );
+    vbox->addWidget(helpSub);
+
+    auto* topSep = new QFrame(content);
+    topSep->setFrameShape(QFrame::HLine);
+    topSep->setStyleSheet("QFrame { color: #111; }");
+    vbox->addWidget(topSep);
+
+    const KeyConfig& kcfg = m_dispatcher->keyConfig();
+
+    auto makeKey = [content](const QString& text)
+    {
+        auto* l = new QLabel(text, content);
+        l->setStyleSheet(
+            "color: #ccc; background: #0e0e0e; border: 1px solid #2a2a2a; "
+            "border-radius: 2px; padding: 1px 7px; "
+            "font-size: 11px; font-family: monospace;"
+        );
+        l->setFixedWidth(192);
+        l->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        return l;
+    };
+    auto makeDesc = [content](const QString& text)
+    {
+        auto* l = new QLabel(text, content);
+        l->setStyleSheet("color: #888; font-size: 11px; font-family: monospace;");
+        return l;
+    };
+
+    using Entry = QPair<QString, QString>;
+    auto addSection = [&](const QString& heading, const QVector<Entry>& entries)
+    {
+        auto* hdr = new QLabel(heading, content);
+        hdr->setStyleSheet(
+            "color: #555; font-size: 9px; letter-spacing: 4px; "
+            "font-family: monospace; padding-top: 20px; padding-bottom: 6px;"
+        );
+        vbox->addWidget(hdr);
+
+        auto* grid = new QGridLayout();
+        grid->setContentsMargins(0, 0, 0, 0);
+        grid->setVerticalSpacing(4);
+        grid->setHorizontalSpacing(10);
+        grid->setColumnStretch(1, 1);
+        grid->setColumnStretch(3, 1);
+        grid->setColumnMinimumWidth(2, 18);
+
+        int half = (entries.size() + 1) / 2;
+        for (int i = 0; i < entries.size(); i++)
+        {
+            int col = (i < half) ? 0 : 2;
+            int row = (i < half) ? i : (i - half);
+            grid->addWidget(makeKey(entries[i].first), row, col);
+            grid->addWidget(makeDesc(entries[i].second), row, col + 1);
+        }
+
+        auto* gw = new QWidget(content);
+        gw->setLayout(grid);
+        vbox->addWidget(gw);
+    };
+
+    addSection(
+        "NAVIGATION",
+        {
+            {":open  :o <url>", "Navigate current tab"},
+            {":tab   :t <url>", "Open in new tab"},
+            {":close :c", "Close current tab"},
+            {":back  :b", "Go back"},
+            {":forward :f", "Go forward"},
+            {":r", "Reload page"},
+            {":home", "Go to home dashboard"},
+            {":undo  :u", "Reopen closed tab"},
+            {":next  :n", "Next tab"},
+            {":prev  :p", "Previous tab"},
+            {":duplicate", "Duplicate current tab"},
+            {":incognito", "New incognito tab"},
+        }
+    );
+
+    QVector<Entry> searchEntries;
+    searchEntries.append(Entry{":s <query>", "DuckDuckGo search"});
+    for (auto it = m_dispatcher->searchEngines().constBegin(); it != m_dispatcher->searchEngines().constEnd(); ++it)
+    {
+        if (it.key() == "s" || it.key() == "ddg")
+            continue;
+        QString label = it.key() + " <query>";
+        QString desc = it.value();
+        desc.remove(QRegularExpression("https?://"));
+        desc = desc.section('/', 0, 0);
+        if (desc.isEmpty())
+            desc = "Configured search engine";
+        searchEntries.append(Entry{label, desc});
+    }
+    searchEntries.append(Entry{":bookmark :bm <n>", "Bookmark current page"});
+    addSection("SEARCH", searchEntries);
+
+    QVector<Entry> customEntries;
+    for (auto it = m_dispatcher->customCommands().constBegin(); it != m_dispatcher->customCommands().constEnd(); ++it)
+    {
+        const QJsonObject cmd = it.value();
+        const QString action = cmd["action"].toString("custom");
+        customEntries.append(
+            Entry{":" + it.key() + " <arg>", action.left(1).toUpper() + action.mid(1) + " custom command"}
+        );
+    }
+    if (!customEntries.isEmpty())
+        addSection("CUSTOM", customEntries);
+
+    addSection(
+        "KEYBOARD",
+        {
+            {kcfg.nextTab, "Next tab"},
+            {kcfg.prevTab, "Previous tab"},
+            {kcfg.reopenClosedTab, "Reopen closed tab"},
+            {kcfg.focusUrlbar, "Focus URL bar"},
+            {kcfg.focusTerminal, "Focus terminal"},
+            {kcfg.findInPage, "Find in page"},
+            {kcfg.linkHints, "Link hints overlay"},
+            {kcfg.fuzzyFinder, "Fuzzy file / tab finder"},
+            {kcfg.toggleReader, "Toggle reader mode"},
+            {kcfg.toggleDarkMode, "Toggle dark mode"},
+            {kcfg.toggleAdBlock, "Toggle ad blocking"},
+            {kcfg.fullscreen, "Toggle fullscreen"},
+            {kcfg.showHelp, "This window"},
+        }
+    );
+
+    addSection(
+        "TERMINAL",
+        {
+            {kcfg.toggleTerminal, "Toggle terminal"},
+            {kcfg.terminalCopy, "Copy selection"},
+            {kcfg.terminalPaste, "Paste"},
+            {kcfg.terminalClear, "Clear"},
+            {kcfg.terminalZoomIn, "Zoom in"},
+            {kcfg.terminalZoomOut, "Zoom out"},
+            {kcfg.terminalZoomReset, "Reset zoom"},
+            {kcfg.sendToTerm, "Send selection to terminal"},
+            {kcfg.codeBlock, "Extract code block"},
+            {kcfg.installCmd, "Find install command"},
+        }
+    );
+
+    addSection(
+        "TOOLS",
+        {
+            {kcfg.devTools, "Developer tools"},
+            {kcfg.viewSource, "View page source"},
+            {kcfg.printPage, "Print / save as PDF"},
+            {kcfg.toggleBmbar, "Toggle bookmark bar"},
+            {":pipe <cmd>", "Run command, show output in tab"},
+            {":reader", "Toggle reader mode"},
+            {":dark / :light", "Toggle dark mode"},
+            {":adblock", "Toggle ad blocking"},
+            {":session save/load/list", "Session management"},
+            {":history", "Recent URLs"},
+            {":reload", "Reload config.json"},
+        }
+    );
+
+    vbox->addStretch();
+
+    auto* footerSep = new QFrame(content);
+    footerSep->setFrameShape(QFrame::HLine);
+    footerSep->setStyleSheet("QFrame { color: #111; margin-top: 12px; }");
+    vbox->addWidget(footerSep);
+
+    auto* footer = new QLabel("ESC  to close", content);
+    footer->setAlignment(Qt::AlignCenter);
+    footer->setStyleSheet(
+        "color: #444; font-size: 10px; letter-spacing: 3px; "
+        "font-family: monospace; padding: 10px 0 6px 0;"
+    );
+    vbox->addWidget(footer);
+
+    scroll->setWidget(content);
+    m_helpFrame->hide();
+
+    if (wasVisible)
+        showHelp();
 }
 
 void AchromaWindow::showHelp()
@@ -1216,13 +1276,45 @@ void AchromaWindow::resizeTerminal(int delta)
     m_splitter->setSizes(sizes);
 }
 
+void AchromaWindow::setTitleAudioActive(bool active)
+{
+    m_audioActive = active;
+    if (!m_audioIndicator || !m_audioTimer)
+        return;
+
+    if (active)
+    {
+        if (!m_audioTimer->isActive())
+            m_audioTimer->start();
+        tickTitleAudioIndicator();
+        return;
+    }
+
+    m_audioTimer->stop();
+    m_audioPhase = 0;
+    m_audioIndicator->clear();
+}
+
+void AchromaWindow::tickTitleAudioIndicator()
+{
+    if (!m_audioIndicator || !m_audioActive)
+        return;
+
+    static const QStringList frames = {"▁▃▆▃▁", "▂▄▇▄▂", "▃▆█▆▃", "▂▄▇▄▂"};
+    m_audioIndicator->setText(frames.at(m_audioPhase % frames.size()));
+    m_audioIndicator->setStyleSheet(
+        "color: #6d6d6d; font-family: monospace; font-size: 10px; letter-spacing: 1px; border: none;"
+    );
+    ++m_audioPhase;
+}
+
 void AchromaWindow::resizeEvent(QResizeEvent* event)
 {
     QMainWindow::resizeEvent(event);
     if (m_helpFrame)
         m_helpFrame->resize(m_central->size());
     if (m_finder && m_finder->isVisible())
-        m_finder->open();
+        m_finder->reposition();
 }
 
 void AchromaWindow::closeEvent(QCloseEvent* event)
@@ -1232,22 +1324,73 @@ void AchromaWindow::closeEvent(QCloseEvent* event)
     bool skipConfirm = settings.value("skipCloseConfirm", false).toBool();
     if (tabs > 1 && !skipConfirm)
     {
-        QMessageBox mb(this);
-        mb.setStyleSheet(
-            "QMessageBox { background-color: #1a1a1a; color: #ccc; }"
-            "QLabel { color: #ccc; font-family: monospace; }"
-            "QPushButton { background: #333; color: #ccc; border: 1px solid #555; padding: 4px 16px; min-width: 60px; "
-            "font-family: monospace; }"
-            "QPushButton:hover { background: #444; }"
-            "QCheckBox { color: #888; font-family: monospace; }"
+        QDialog dialog(this);
+        dialog.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+        dialog.setWindowTitle("Achroma");
+        dialog.setModal(true);
+        dialog.setFixedWidth(360);
+        dialog.setStyleSheet(
+            "QDialog { background: #060606; border: 1px solid #1f1f1f; }"
+            "QLabel { color: #d0d0d0; font-family: monospace; border: none; }"
+            "QCheckBox { color: #5f5f5f; font-family: monospace; font-size: 10px; spacing: 7px; }"
+            "QCheckBox::indicator { width: 10px; height: 10px; border: 1px solid #303030; background: #0b0b0b; }"
+            "QCheckBox::indicator:checked { background: #cfcfcf; border-color: #cfcfcf; }"
+            "QPushButton { background: transparent; color: #777; border: 1px solid #252525; border-radius: 3px; "
+            "padding: 5px 14px; min-width: 72px; font-family: monospace; font-size: 11px; }"
+            "QPushButton:hover { background: #101010; border-color: #3a3a3a; color: #ddd; }"
+            "QPushButton#closeButton { color: #cfcfcf; border-color: #343434; }"
+            "QPushButton#closeButton:hover { background: #161616; border-color: #555; color: #fff; }"
+            "QToolButton { background: #141414; border: none; border-radius: 4px; }"
         );
-        mb.setWindowTitle("Achroma");
-        mb.setText(QString("You have %1 tabs open. Close Achroma?").arg(tabs));
-        mb.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-        mb.setDefaultButton(QMessageBox::No);
-        QCheckBox* cb = new QCheckBox("Don't ask again");
-        mb.setCheckBox(cb);
-        if (mb.exec() != QMessageBox::Yes)
+
+        auto* layout = new QVBoxLayout(&dialog);
+        layout->setContentsMargins(0, 0, 0, 16);
+        layout->setSpacing(0);
+
+        auto* chrome = new QWidget(&dialog);
+        chrome->setFixedHeight(26);
+        chrome->setStyleSheet("QWidget { background: #050505; border-bottom: 1px solid #111; }");
+        auto* chromeLayout = new QHBoxLayout(chrome);
+        chromeLayout->setContentsMargins(13, 0, 13, 0);
+        chromeLayout->setSpacing(0);
+        auto* chromeTitle = new QLabel("close", chrome);
+        chromeTitle->setAlignment(Qt::AlignCenter);
+        chromeTitle->setStyleSheet("color:#343434;font-family:monospace;font-size:9px;letter-spacing:2px;border:none;");
+        chromeLayout->addWidget(chromeTitle);
+        layout->addWidget(chrome);
+
+        auto* body = new QWidget(&dialog);
+        auto* bodyLayout = new QVBoxLayout(body);
+        bodyLayout->setContentsMargins(22, 18, 22, 0);
+        bodyLayout->setSpacing(10);
+
+        auto* title = new QLabel("Close Achroma?", body);
+        title->setStyleSheet("color:#eeeeee;font-size:14px;font-weight:bold;font-family:monospace;border:none;");
+        bodyLayout->addWidget(title);
+
+        auto* message = new QLabel(QString("%1 tabs open. Session will be saved.").arg(tabs), body);
+        message->setWordWrap(true);
+        message->setStyleSheet("color:#7e7e7e;font-size:11px;font-family:monospace;border:none;");
+        bodyLayout->addWidget(message);
+
+        QCheckBox* cb = new QCheckBox("Don't ask again", body);
+        bodyLayout->addWidget(cb);
+
+        auto* buttons = new QHBoxLayout();
+        buttons->setContentsMargins(0, 4, 0, 0);
+        buttons->addStretch();
+        auto* cancelBtn = new QPushButton("Cancel", body);
+        auto* closeBtn = new QPushButton("Close", body);
+        closeBtn->setObjectName("closeButton");
+        buttons->addWidget(cancelBtn);
+        buttons->addWidget(closeBtn);
+        bodyLayout->addLayout(buttons);
+        layout->addWidget(body);
+
+        connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
+        connect(closeBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
+
+        if (dialog.exec() != QDialog::Accepted)
         {
             event->ignore();
             return;

@@ -1,10 +1,21 @@
 #include "utils.h"
 #include <QRegularExpression>
 #include <QSettings>
+#include <QTextDocument>
 #include <QUrl>
 
 namespace Achroma
 {
+
+QString configDir()
+{
+    return QDir::homePath() + "/.config/achroma";
+}
+
+QString dataDir()
+{
+    return QDir::homePath() + "/.local/share/achroma";
+}
 
 QString urlEncode(const QString& text)
 {
@@ -50,6 +61,73 @@ QString stripTerminalControls(QString text)
     text.remove(oscRe);
     text.remove('\r');
     return text;
+}
+
+QString markdownPageHtml(const QString& title, const QString& markdown)
+{
+    QTextDocument doc;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    doc.setMarkdown(markdown, QTextDocument::MarkdownDialectGitHub);
+#else
+    doc.setMarkdown(markdown);
+#endif
+
+    const QString rendered = doc.toHtml();
+    QString body = rendered;
+    QRegularExpression bodyRe("<body[^>]*>(.*)</body>", QRegularExpression::DotMatchesEverythingOption);
+    QRegularExpressionMatch bodyMatch = bodyRe.match(rendered);
+    if (bodyMatch.hasMatch())
+        body = bodyMatch.captured(1);
+
+    body.replace(QRegularExpression(R"(</pre>\s*<pre[^>]*>)"), "\n");
+    body.replace(QRegularExpression(R"(<(td|th)[^>]*>\s*</\1>)"), "");
+
+    return QString(
+               "<!DOCTYPE html><html><head><meta charset='utf-8'><title>%1</title>"
+               "<style>"
+               ":root{color-scheme:dark}"
+               "*{box-sizing:border-box}"
+               "html{background:#080808}"
+               "body{margin:0;background:#080808;color:#d2d2d2;"
+               "font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+               "font-size:15px;line-height:1.68}"
+               "main{width:min(860px,calc(100vw - 56px));margin:36px auto 72px}"
+               "article{padding-bottom:24px}"
+               "h1,h2,h3,h4,h5,h6{color:#f2f2f2;line-height:1.22;margin:28px 0 10px;font-weight:700}"
+               "h1{font-size:34px;letter-spacing:0;border-bottom:1px solid #242424;padding-bottom:14px;margin-top:0}"
+               "h2{font-size:24px;border-bottom:1px solid #1e1e1e;padding-bottom:8px}"
+               "h3{font-size:18px}h4,h5,h6{font-size:15px;color:#e2e2e2}"
+               "p{margin:10px 0}"
+               "a{color:#8fb6ff;text-decoration:none;border-bottom:1px solid #2b4776}"
+               "a:hover{color:#bed2ff;border-bottom-color:#7ea2e8}"
+               "strong{color:#eeeeee;font-weight:650}"
+               "em{color:#e0e0e0}"
+               "code{background:#171717;color:#f0d78c;padding:2px 5px;border:1px solid #252525;border-radius:4px;"
+               "font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92em}"
+               "pre{background:#101010;border:1px solid #242424;border-radius:7px;padding:15px "
+               "16px;overflow:auto;margin:16px 0;"
+               "white-space:pre-wrap;word-break:break-word}"
+               "pre+pre{margin-top:-17px;border-top:none;border-radius:0 0 7px 7px}"
+               "pre code{background:transparent;border:none;color:#dedede;padding:0;font-size:13px;line-height:1.55}"
+               "blockquote{border-left:3px solid #4b658d;margin:18px 0;padding:2px 0 2px "
+               "18px;color:#aaaaaa;background:#0d0d0d}"
+               "table{border-collapse:separate;border-spacing:0;width:auto;max-width:100%%;margin:18px "
+               "0;display:block;overflow:auto;"
+               "border:1px solid #2b2b2b;border-radius:7px;background:#0c0c0c}"
+               "th,td{border:0;border-right:1px solid #2b2b2b;border-bottom:1px solid #242424;padding:9px "
+               "12px;text-align:left;vertical-align:top}"
+               "th:last-child,td:last-child{border-right:0}tr:last-child td{border-bottom:0}"
+               "th{background:#151515;color:#eeeeee;font-weight:700}"
+               "tr:nth-child(even) td{background:#101010}"
+               "ul,ol{padding-left:26px;margin:12px 0}"
+               "li{margin:5px 0}"
+               "hr{border:none;border-top:1px solid #242424;margin:32px 0}"
+               "img{max-width:100%%;height:auto;border-radius:6px;border:1px solid #222;background:#111}"
+               "@media(max-width:640px){main{width:calc(100vw - 28px);margin:24px auto "
+               "48px}h1{font-size:28px}h2{font-size:21px}}"
+               "</style></head><body><main><article>%2</article></main></body></html>"
+    )
+        .arg(title.toHtmlEscaped(), body);
 }
 
 QString homePageHtml(const QMap<QString, QString>& bookmarks, const QList<Achroma::QuickLink>& quickLinks)

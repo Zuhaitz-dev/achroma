@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PREFIX="${PREFIX:-/usr/local}"
 
 if [ "${1:-}" = "--uninstall" ]; then
     echo "=== Uninstalling Achroma ==="
@@ -19,7 +20,7 @@ if [ "${1:-}" = "--uninstall" ]; then
 fi
 
 echo "=== Installing Achroma system-wide ==="
-echo "This will install to /usr/local/bin"
+echo "Prefix: $PREFIX"
 echo ""
 
 cd "$PROJECT_DIR"
@@ -27,7 +28,7 @@ cd "$PROJECT_DIR"
 # Build if needed
 if [ ! -f build/Achroma ]; then
     echo "Building..."
-    cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" -DBUILD_TESTS=OFF
     make -j$(nproc) -C build
 fi
 

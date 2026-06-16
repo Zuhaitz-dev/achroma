@@ -54,9 +54,12 @@ make -C build -j$(nproc)
 | Integrated terminal | Real-time output triggers, zoom, search, profile switching |
 | Vim keys | `j` `k` `d` `u` `G` `gg` scrolling, link hints (Vimium-style) |
 | Command system | `:open`, `:tab`, `:search`, `:hint`, `:bookmark`, `:session`, and more |
-| Fuzzy finder | `Ctrl+Shift+P` filer: files, tabs, bookmarks, history, commands |
+| Fuzzy finder | `Ctrl+Shift+P` finder for files, tabs, bookmarks, history, and commands; press it again or `Escape` to close |
 | Ad blocking | EasyList-style domain blocklist (`~/.config/achroma/blocklist.txt`) |
 | IPC control | Unix socket, `achroma-cli` from any terminal |
+| Markdown reader | `:md <file>` renders local Markdown in a styled in-tab reader view |
+| Audio indicator | Title bar shows a subtle activity meter while any tab is playing audio |
+| Dynamic help | Help reflects configured keybindings, search engines, and custom commands after config reload |
 | Configurable | Colors, fonts, keybindings, search engines, CSS themes |
 
 ---
@@ -135,7 +138,7 @@ chmod +x linuxdeploy-x86_64.AppImage
 }
 ```
 
-Hot-reloaded on save, no restart needed.
+Hot-reloaded on save, no restart needed. The help overlay rebuilds after reload, so configured keybindings, search engines, and custom commands are reflected automatically.
 
 ---
 
@@ -187,6 +190,7 @@ Type `:command` in the URL bar, or prefix with `:` in the terminal.
 | `codeblock` | Extract code block from page |
 | `install` | Find install command on page |
 | `notes` | Quick scratchpad |
+| `markdown` / `md <file>` | Render local Markdown in a styled reader tab |
 | `session save/load <name>` | Named session management |
 
 ### Terminal
@@ -218,9 +222,9 @@ Type `:command` in the URL bar, or prefix with `:` in the terminal.
 | `Ctrl+Shift+I` | Find install command on page |
 | `Ctrl+F` | Find in page |
 | `Ctrl+Shift+F` | Link hints |
-| `Ctrl+Shift+P` | Fuzzy finder |
+| `Ctrl+Shift+P` | Toggle fuzzy finder |
 | `Ctrl+Shift+H` | Help overlay |
-| `Escape` | Close overlay / find bar |
+| `Escape` | Close overlay / fuzzy finder / find bar |
 | `F12` | Developer tools |
 | `F11` | Fullscreen |
 | `Ctrl+Shift+D` | Toggle dark mode |
@@ -321,7 +325,7 @@ make -C build lint        # clang-tidy
 
 ```
 src/
-  browser.h/cpp          Tab management, URL bar, session, autocomplete
+  browser.h/cpp          Tab management, URL bar, session, autocomplete, local Markdown routing
   terminal.h/cpp         QTermWidget wrapper, PTY output, zoom
   commands.h/cpp         Command dispatch, config load, search engines
   triggers.h/cpp         Terminal output pattern matching
@@ -329,8 +333,8 @@ src/
   ipc.h/cpp              Unix socket server for CLI control
   adblockinterceptor.h/cpp  URL request interceptor (EasyList-style)
   splash.h/cpp           Startup splash screen
-  window.h/cpp           Main window, layout, shortcuts, help overlay
-  utils.h/cpp            URL formatting, ANSI stripping, JS injection
+  window.h/cpp           Main window, layout, shortcuts, dynamic help overlay, close confirmation
+  utils.h/cpp            URL formatting, ANSI stripping, JS injection, Markdown reader HTML
 
 test/
   test.cpp               Utils unit tests

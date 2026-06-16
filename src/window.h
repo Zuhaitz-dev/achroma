@@ -40,6 +40,7 @@ private slots:
 
 private:
     void setupUi();
+    void setupHelpOverlay();
     void setupShortcuts();
     void showHelp();
     void showLinkHints();
@@ -47,10 +48,16 @@ private:
     void setStatus(const QString& msg, int timeoutMs = 5000);
     void openDevTools();
     void attachDevToolsTo(QWebEngineView* v);
+    void setTitleAudioActive(bool active);
+    void tickTitleAudioIndicator();
 
     QWidget* m_central = nullptr;
     QWidget* m_titleBar = nullptr;
     QLabel* m_titleLabel = nullptr;
+    QLabel* m_audioIndicator = nullptr;
+    QTimer* m_audioTimer = nullptr;
+    bool m_audioActive = false;
+    int m_audioPhase = 0;
     QPoint m_dragPos;
     bool m_dragging = false;
     QSplitter* m_splitter = nullptr;

@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-# --- Build type defaults ---
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
@@ -16,7 +15,6 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
 
 add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
 
-# --- Sanitizer options ---
 option(ENABLE_ASAN  "Enable AddressSanitizer"  OFF)
 option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(ENABLE_TSAN  "Enable ThreadSanitizer"   OFF)
@@ -43,7 +41,6 @@ if(ENABLE_ASAN OR ENABLE_UBSAN OR ENABLE_TSAN)
         add_link_options(-L"${GCC_LIB_DIR}" -Wl,-rpath-link,"${GCC_LIB_DIR}")
     endif()
 
-    # Verify the sanitizer is actually linkable
     include(CheckCXXSourceCompiles)
     set(CMAKE_REQUIRED_FLAGS "-fsanitize=address")
     check_cxx_source_compiles("int main(){}" ASAN_WORKS)
@@ -71,6 +68,7 @@ set(SOURCES
     src/ipc.cpp
     src/adblockinterceptor.cpp
     src/fuzzyfinder.cpp
+    src/permissionbar.cpp
     src/splash.cpp
     src/window.cpp
 )
@@ -88,13 +86,11 @@ target_link_libraries(Achroma PRIVATE
     qtermwidget6
 )
 
-# --- Tests ---
 option(BUILD_TESTS "Build unit tests" ON)
 if(BUILD_TESTS)
     enable_testing()
     find_package(Qt6 REQUIRED COMPONENTS Test)
 
-    # Unit tests — test_helpers.h as a source triggers AutoMOC for the Q_OBJECT class
     add_executable(achroma_test
         test/test.cpp
         test/test_helpers.h
@@ -104,7 +100,6 @@ if(BUILD_TESTS)
     target_link_libraries(achroma_test PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME AchromaTests COMMAND achroma_test)
 
-    # Adblock interceptor tests
     add_executable(test_adblock
         test/test_adblock.cpp
         src/adblockinterceptor.cpp
@@ -114,12 +109,12 @@ if(BUILD_TESTS)
     add_test(NAME AdBlockTests COMMAND test_adblock)
     set_tests_properties(AdBlockTests PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 
-    # Command dispatcher tests
     add_executable(test_commands
         test/test_commands.cpp
         test/test_commands_helpers.h
         src/commands.cpp
         src/browser.cpp
+        src/permissionbar.cpp
         src/terminal.cpp
         src/utils.cpp
         src/triggers.cpp
@@ -132,7 +127,6 @@ if(BUILD_TESTS)
     add_test(NAME CommandTests COMMAND test_commands)
     set_tests_properties(CommandTests PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 
-    # Injected JavaScript / home-page integration tests
     add_executable(test_scripts
         test/test_scripts.cpp
         test/test_scripts_helpers.h
@@ -146,7 +140,6 @@ if(BUILD_TESTS)
     set_property(TEST ScriptTests APPEND PROPERTY ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0:new_delete_type_mismatch=0")
 endif()
 
-# --- Install ---
 include(GNUInstallDirs)
 install(FILES $<TARGET_FILE:Achroma> DESTINATION ${CMAKE_INSTALL_BINDIR}
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
@@ -155,7 +148,6 @@ install(FILES Achroma.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES achroma.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 install(PROGRAMS achroma-cli DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-# --- Uninstall ---
 add_custom_target(uninstall
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake
 )
@@ -165,7 +157,6 @@ configure_file(
     @ONLY
 )
 
-# --- Lint (clang-tidy) ---
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)
 if(CLANG_TIDY_EXE)
     set(LINT_SOURCES ${SOURCES} test/test_commands_helpers.h test/test_helpers.h test/test_scripts_helpers.h)

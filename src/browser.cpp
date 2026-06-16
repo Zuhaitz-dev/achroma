@@ -1,5 +1,6 @@
 #include "browser.h"
 #include "commands.h"
+#include "permissionbar.h"
 #include "utils.h"
 #include <QAction>
 #include <QApplication>
@@ -186,6 +187,10 @@ BrowserTabs::BrowserTabs(QWidget* parent) : QObject(parent)
     layout->addWidget(m_bookmarkBar);
     refreshBookmarkBar();
 
+    m_permissionBar = new PermissionBar(m_container);
+    m_permissionBar->setStyleSheet("PermissionBar { background-color: #0a0a0a; border-bottom: 1px solid #1a1a1a; }");
+    layout->addWidget(m_permissionBar);
+
     m_tabs = new QTabWidget(m_container);
     m_tabs->setTabsClosable(true);
     m_tabs->setMovable(true);
@@ -270,6 +275,7 @@ BrowserTabs::BrowserTabs(QWidget* parent) : QObject(parent)
         {
             QWebEngineView* v = currentView();
             emit titleChanged(v ? v->title() : QString());
+            emit audibleChanged(hasAudibleTab());
             updateLockIcon(v ? v->url() : QUrl());
             setUrlBarClean(v ? v->url() : QUrl());
         }
@@ -287,6 +293,43 @@ QWebEngineView* BrowserTabs::currentView() const
 int BrowserTabs::tabCount() const
 {
     return m_tabs->count();
+}
+
+bool BrowserTabs::hasAudibleTab() const
+{
+    for (int i = 0; i < m_tabs->count(); ++i)
+    {
+        auto* view = qobject_cast<QWebEngineView*>(m_tabs->widget(i));
+        if (view && view->page() && view->page()->recentlyAudible())
+            return true;
+    }
+    return false;
+}
+
+bool BrowserTabs::renderMarkdownFile(QWebEngineView* view, const QString& path) const
+{
+    if (!view)
+        return false;
+
+    const QFileInfo info(path);
+    const QString suffix = info.suffix().toLower();
+    if (suffix != "md" && suffix != "markdown")
+        return false;
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+
+    const QString markdown = QString::fromUtf8(file.readAll());
+    view->setHtml(Achroma::markdownPageHtml(info.fileName(), markdown), QUrl::fromLocalFile(info.absoluteFilePath()));
+    return true;
+}
+
+bool BrowserTabs::openLocalMarkdown(QWebEngineView* view, const QUrl& url) const
+{
+    if (!url.isLocalFile())
+        return false;
+    return renderMarkdownFile(view, url.toLocalFile());
 }
 
 void BrowserTabs::switchToTab(int idx)
@@ -358,7 +401,7 @@ void BrowserTabs::addNewTab(const QUrl& url)
     {
         loadHomePage(view);
     }
-    else
+    else if (!openLocalMarkdown(view, url))
     {
         view->setUrl(url);
     }
@@ -463,7 +506,7 @@ void BrowserTabs::addNewTab(const QUrl& url)
                 updateAutocomplete();
 
                 QString host = u.host();
-                QString scriptPath = QDir::homePath() + "/.config/achroma/scripts/" + host + ".js";
+                QString scriptPath = Achroma::configDir() + "/scripts/" + host + ".js";
                 QFile sf(scriptPath);
                 if (sf.open(QIODevice::ReadOnly))
                 {
@@ -476,6 +519,27 @@ void BrowserTabs::addNewTab(const QUrl& url)
 
     connect(
         view->page(),
+        &QWebEnginePage::featurePermissionRequested,
+        this,
+        [this, view](const QUrl& origin, QWebEnginePage::Feature feature)
+        {
+            m_permissionBar->request(
+                origin,
+                feature,
+                [view, origin, feature](bool granted)
+                {
+                    view->page()->setFeaturePermission(
+                        origin,
+                        feature,
+                        granted ? QWebEnginePage::PermissionGrantedByUser : QWebEnginePage::PermissionDeniedByUser
+                    );
+                }
+            );
+        }
+    );
+
+    connect(
+        view->page(),
         &QWebEnginePage::recentlyAudibleChanged,
         this,
         [this, view](bool audible)
@@ -485,6 +549,7 @@ void BrowserTabs::addNewTab(const QUrl& url)
                 return;
             QString title = view->title().left(24);
             m_tabs->setTabText(i, audible ? "♪ " + title : title);
+            emit audibleChanged(hasAudibleTab());
         }
     );
 
@@ -573,7 +638,7 @@ void BrowserTabs::addIncognitoTab(const QUrl& url)
     view->setPage(page);
     if (url.isEmpty())
         view->setHtml(Achroma::homePageHtml(), QUrl("achroma://home"));
-    else
+    else if (!openLocalMarkdown(view, url))
         view->setUrl(url);
     int idx = m_tabs->addTab(view, "[I] Loading...");
     m_tabs->setCurrentIndex(idx);
@@ -604,6 +669,26 @@ void BrowserTabs::addIncognitoTab(const QUrl& url)
     connect(view->page(), &QWebEnginePage::linkHovered, this, &BrowserTabs::linkHovered);
     connect(
         view->page(),
+        &QWebEnginePage::featurePermissionRequested,
+        this,
+        [this, view](const QUrl& origin, QWebEnginePage::Feature feature)
+        {
+            m_permissionBar->request(
+                origin,
+                feature,
+                [view, origin, feature](bool granted)
+                {
+                    view->page()->setFeaturePermission(
+                        origin,
+                        feature,
+                        granted ? QWebEnginePage::PermissionGrantedByUser : QWebEnginePage::PermissionDeniedByUser
+                    );
+                }
+            );
+        }
+    );
+    connect(
+        view->page(),
         &QWebEnginePage::recentlyAudibleChanged,
         this,
         [this, view](bool audible)
@@ -613,6 +698,7 @@ void BrowserTabs::addIncognitoTab(const QUrl& url)
                 return;
             QString title = view->title().left(22);
             m_tabs->setTabText(i, audible ? "♪[I]" + title : "[I] " + title);
+            emit audibleChanged(hasAudibleTab());
         }
     );
 }
@@ -753,10 +839,7 @@ bool BrowserTabs::eventFilter(QObject* obj, QEvent* event)
             QDropEvent* de = static_cast<QDropEvent*>(event);
             for (const QUrl& url : de->mimeData()->urls())
             {
-                if (url.isLocalFile())
-                    addNewTab(QUrl::fromLocalFile(url.toLocalFile()));
-                else
-                    addNewTab(url);
+                addNewTab(url);
             }
             if (de->mimeData()->urls().isEmpty() && de->mimeData()->hasText())
             {
@@ -990,9 +1073,15 @@ bool BrowserTabs::isPinned(int idx) const
 void BrowserTabs::navigateOrNewTab(const QUrl& url)
 {
     if (m_pinnedTabs.contains(m_tabs->currentIndex()))
+    {
         addNewTab(url);
-    else if (QWebEngineView* v = currentView())
-        v->setUrl(url);
+        return;
+    }
+    if (QWebEngineView* v = currentView())
+    {
+        if (!openLocalMarkdown(v, url))
+            v->setUrl(url);
+    }
 }
 
 void BrowserTabs::loadHomePage(QWebEngineView* view)

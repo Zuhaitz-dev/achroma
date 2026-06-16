@@ -33,6 +33,7 @@ public:
     void toggleSearchBar();
     void setProfile(const QString& name);
     static QStringList availableProfiles();
+    QString shellCwd() const;
 
 signals:
     void outputAvailable(const QString& text);

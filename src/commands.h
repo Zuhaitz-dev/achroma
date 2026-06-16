@@ -130,6 +130,10 @@ public:
     {
         return m_searchEngines;
     }
+    const QMap<QString, QJsonObject>& customCommands() const
+    {
+        return m_customCommands;
+    }
 
     std::function<void()> showHelpCallback;
     std::function<void()> showHintsCallback;

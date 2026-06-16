@@ -1,4 +1,5 @@
 #pragma once
+#include <QDir>
 #include <QList>
 #include <QMap>
 #include <QString>
@@ -13,12 +14,15 @@ struct QuickLink
     QString icon;
 };
 
+QString configDir();
+QString dataDir();
 QString formatUrl(const QString& input);
 QString searchUrl(const QString& engine, const QString& query);
 QString duckDuckGoUrl(const QString& query);
 QString urlEncode(const QString& text);
 QString stripTerminalControls(QString text);
 QString homePageHtml(const QMap<QString, QString>& bookmarks = {}, const QList<QuickLink>& quickLinks = {});
+QString markdownPageHtml(const QString& title, const QString& markdown);
 QString linkHintsScript();
 QString keyScrollScript();
 QString codeBlockScript();

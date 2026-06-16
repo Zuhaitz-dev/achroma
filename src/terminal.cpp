@@ -226,3 +226,14 @@ bool Terminal::eventFilter(QObject* obj, QEvent* event)
     }
     return QObject::eventFilter(obj, event);
 }
+
+QString Terminal::shellCwd() const
+{
+    int pid = m_term ? m_term->getShellPID() : -1;
+    if (pid <= 0 && m_lastShellPid > 0)
+        pid = m_lastShellPid;
+    if (pid <= 0)
+        return QString();
+    QString procPath = "/proc/" + QString::number(pid) + "/cwd";
+    return QFileInfo(procPath).symLinkTarget();
+}

@@ -23,6 +23,9 @@ public:
     void setTerminal(Terminal* terminal);
 
     void open();
+    void closeFinder();
+    void toggle();
+    void reposition();
 
 signals:
     void itemActivated();

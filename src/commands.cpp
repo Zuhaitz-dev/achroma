@@ -15,7 +15,9 @@
 #include <QLineEdit>
 #include <QPointer>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QTabWidget>
 #include <QTimer>
 #include <QUrl>
@@ -510,7 +512,7 @@ void CommandDispatcher::setupBuiltins()
     {
         if (!m_browser)
             return;
-        QString notesPath = QDir::homePath() + "/.config/achroma/notes.txt";
+        QString notesPath = Achroma::configDir() + "/notes.txt";
         QString content;
         QFile nf(notesPath);
         if (nf.open(QIODevice::ReadOnly))
@@ -537,6 +539,39 @@ void CommandDispatcher::setupBuiltins()
             nv->setHtml(html, QUrl("achroma://notes"));
     };
 
+    m_dispatch["markdown"] = m_dispatch["md"] = [this](QWebEngineView*, const QString& arg)
+    {
+        if (!m_browser || arg.isEmpty())
+            return;
+        QString path = arg.trimmed();
+        if (path.startsWith('~'))
+            path = QDir::homePath() + path.mid(1);
+        if (!path.startsWith('/'))
+        {
+            QString cwd = m_terminal ? m_terminal->shellCwd() : QString();
+            if (!cwd.isEmpty())
+                path = QDir(cwd).absoluteFilePath(path);
+            else
+                path = QFileInfo(path).absoluteFilePath();
+        }
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly))
+        {
+            if (m_terminal)
+                m_terminal->sendText("# markdown: cannot open " + path + "\n");
+            return;
+        }
+        const QString markdown = QString::fromUtf8(f.readAll());
+        f.close();
+
+        const QString html = Achroma::markdownPageHtml(QFileInfo(path).fileName(), markdown);
+
+        m_browser->addNewTab(QUrl("about:blank"));
+        QWebEngineView* nv = m_browser->currentView();
+        if (nv)
+            nv->setHtml(html, QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath()));
+    };
+
     m_dispatch["session"] = [this](QWebEngineView*, const QString& arg)
     {
         if (!m_browser || !m_terminal)
@@ -549,7 +584,7 @@ void CommandDispatcher::setupBuiltins()
         }
         QString cmd = parts[0];
         QString name = parts.mid(1).join(' ');
-        QString sessionsDir = QDir::homePath() + "/.config/achroma/sessions";
+        QString sessionsDir = Achroma::configDir() + "/sessions";
         QDir().mkpath(sessionsDir);
 
         if (cmd == "list")
@@ -780,8 +815,12 @@ void CommandDispatcher::setupBuiltins()
         v->page()->printToPdf(
             [](const QByteArray& data)
             {
-                QString path =
-                    QFileDialog::getSaveFileName(nullptr, "Save PDF", QDir::homePath() + "/page.pdf", "PDF (*.pdf)");
+                QString path = QFileDialog::getSaveFileName(
+                    nullptr,
+                    "Save PDF",
+                    QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/page.pdf",
+                    "PDF (*.pdf)"
+                );
                 if (!path.isEmpty())
                 {
                     QFile f(path);
@@ -912,7 +951,7 @@ void CommandDispatcher::loadConfig()
     }
     m_mergedTriggers = defaults;
 
-    QString configPath = QDir::homePath() + "/.config/achroma/config.json";
+    QString configPath = Achroma::configDir() + "/config.json";
     watchConfig(configPath);
 
     QFile f(configPath);

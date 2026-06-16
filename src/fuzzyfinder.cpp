@@ -219,16 +219,7 @@ FuzzyFinder::FuzzyFinder(QWidget* parent) : QFrame(parent)
 
     auto* escShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
     escShortcut->setContext(Qt::WidgetWithChildrenShortcut);
-    connect(
-        escShortcut,
-        &QShortcut::activated,
-        this,
-        [this]()
-        {
-            hide();
-            emit closed();
-        }
-    );
+    connect(escShortcut, &QShortcut::activated, this, [this]() { closeFinder(); });
 
     hide();
 }
@@ -250,13 +241,37 @@ void FuzzyFinder::open()
 {
     if (!parentWidget())
         return;
-    QPoint center = parentWidget()->rect().center();
-    move(center.x() - width() / 2, center.y() - height() / 2);
+    reposition();
     m_input->clear();
     m_list->clear();
     show();
     raise();
     m_input->setFocus();
+}
+
+void FuzzyFinder::closeFinder()
+{
+    m_debounce->stop();
+    hide();
+    emit closed();
+}
+
+void FuzzyFinder::toggle()
+{
+    if (isVisible())
+    {
+        closeFinder();
+        return;
+    }
+    open();
+}
+
+void FuzzyFinder::reposition()
+{
+    if (!parentWidget())
+        return;
+    QPoint center = parentWidget()->rect().center();
+    move(center.x() - width() / 2, center.y() - height() / 2);
 }
 
 bool FuzzyFinder::eventFilter(QObject* obj, QEvent* event)
@@ -266,8 +281,7 @@ bool FuzzyFinder::eventFilter(QObject* obj, QEvent* event)
         auto* ke = static_cast<QKeyEvent*>(event);
         if (ke->key() == Qt::Key_Escape)
         {
-            hide();
-            emit closed();
+            closeFinder();
             return true;
         }
     }
