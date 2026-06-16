@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/">
+    <file>achroma.svg</file>
+  </qresource>
+</RCC>

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Achroma
+Comment=Keyboard-driven hybrid browser and terminal environment
+Exec=achroma
+Icon=achroma
+Terminal=false
+Categories=Network;WebBrowser;TerminalEmulator;Development;
+Keywords=browser;terminal;developer;web;cli;
+StartupNotify=true
+StartupWMClass=Achroma

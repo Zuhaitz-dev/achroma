@@ -1,0 +1,128 @@
+{
+  "appearance": {
+    "font_family": "Source Code Pro",
+    "font_size": 16,
+    "bg": "#000000",
+    "fg": "#ffffff"
+  },
+
+  "engines": {
+    "mdn":     "https://developer.mozilla.org/en-US/search?q=",
+    "cpp":     "https://en.cppreference.com/mwiki/index.php?search=",
+    "rust":    "https://doc.rust-lang.org/std/index.html?search=",
+    "npm":     "https://www.npmjs.com/search?q=",
+    "pypi":    "https://pypi.org/search/?q=",
+    "aur":     "https://aur.archlinux.org/packages/?K=",
+    "nix":     "https://search.nixos.org/packages?query=",
+    "crates":  "https://crates.io/search?q=",
+    "so":      "https://stackoverflow.com/search?q=",
+    "gh":      "https://github.com/search?q=",
+    "ddg":     "https://duckduckgo.com/?q="
+  },
+
+  "commands": {
+    "wayback": {
+      "action": "js",
+      "code": "window.open('https://web.archive.org/web/*/' + location.href)"
+    },
+    "translate": {
+      "action": "js",
+      "code": "window.open('https://translate.google.com/translate?u=' + encodeURIComponent(location.href))"
+    },
+    "pdf": {
+      "action": "js",
+      "code": "window.open(location.href.replace(/\\/wiki\\//, '/wiki/Special:Export/'))"
+    },
+    "focus-main": {
+      "action": "js",
+      "code": "document.querySelector('main, article, [role=main], #content')?.scrollIntoView()"
+    }
+  },
+
+  "triggers": [
+    {
+      "comment": "C/C++ compiler errors → cppreference search",
+      "pattern": "error: '([^']+)' (was not declared|undeclared|undefined)",
+      "action": "search",
+      "engine": "https://en.cppreference.com/mwiki/index.php?search={{1}}"
+    },
+    {
+      "comment": "Rust compiler errors → Rust std search",
+      "pattern": "error\\[E(\\d+)\\]",
+      "action": "search",
+      "engine": "https://doc.rust-lang.org/error_codes/E{{1}}.html"
+    },
+    {
+      "comment": "npm errors → npm docs",
+      "pattern": "npm ERR! (\\S+)",
+      "action": "search",
+      "engine": "https://docs.npmjs.com/cli/v10/commands/{{1}}"
+    },
+    {
+      "comment": "Python tracebacks → Stack Overflow",
+      "pattern": "(\\w+Error|\\w+Exception): (.+)",
+      "action": "search",
+      "engine": "https://stackoverflow.com/search?q=python+{{1}}+{{2}}"
+    },
+    {
+      "comment": "pytest failures → DuckDuckGo",
+      "pattern": "FAILED (.+)::(\\S+)",
+      "action": "search",
+      "engine": "https://duckduckgo.com/?q=pytest+{{2}}"
+    },
+    {
+      "comment": "make errors → cppreference",
+      "pattern": "make: \\*\\*\\* \\[([^]]+)\\]",
+      "action": "search",
+      "engine": "https://en.cppreference.com/mwiki/index.php?search={{1}}"
+    },
+    {
+      "comment": "file:line patterns → open in editor",
+      "pattern": "([^\\s:]+\\.(?:cpp|c|h|rs|py|js|ts|go)):(\\d+)",
+      "action": "external",
+      "command": "nvim +{{2}} {{1}}"
+    },
+    {
+      "comment": "URLs in terminal output → open in browser",
+      "pattern": "https?://[^\\s)>\"']+",
+      "action": "open"
+    }
+  ],
+
+  "keys": {
+    "focus_terminal":    "Ctrl+T",
+    "toggle_terminal":   "Ctrl+J",
+    "focus_urlbar":      "Ctrl+Shift+L",
+    "toggle_split":      "Ctrl+O",
+    "new_tab_from_urlbar": "Ctrl+Return",
+    "link_hints":        "Ctrl+Shift+F",
+    "show_help":         "Ctrl+Shift+H",
+    "fuzzy_finder":      "Ctrl+Shift+P",
+    "find_in_page":      "Ctrl+F",
+    "next_tab":          "Ctrl+Tab",
+    "prev_tab":          "Ctrl+Shift+Tab",
+    "terminal_zoom_in":  "Ctrl++",
+    "terminal_zoom_out": "Ctrl+-",
+    "terminal_zoom_reset": "Ctrl+0",
+    "dev_tools":         "F12",
+    "fullscreen":        "F11"
+  },
+
+  "dev": {
+    "editor": "nvim",
+    "search_dirs": ["~/projects", "~/src", "~/code"],
+    "runners": {
+      "cpp": "g++ -std=c++23 {file} -o /tmp/achroma-out && /tmp/achroma-out",
+      "rs":  "rustc {file} -o /tmp/achroma-out && /tmp/achroma-out",
+      "py":  "python3 {file}",
+      "js":  "node {file}",
+      "sh":  "bash {file}",
+      "go":  "go run {file}"
+    },
+    "docs_urls": {
+      "mdn":  "https://developer.mozilla.org/en-US/search?q={name}",
+      "man":  "https://man7.org/linux/man-pages/man1/{name}.1.html",
+      "rust": "https://doc.rust-lang.org/std/index.html?search={name}"
+    }
+  }
+}

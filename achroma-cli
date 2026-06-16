@@ -1,0 +1,138 @@
+#!/bin/bash
+# achroma-cli — control Achroma browser from the terminal
+
+XDG_DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+SOCKET="$XDG_DATA/achroma/achroma.sock"
+
+die() { echo "achroma-cli: $*" >&2; exit 1; }
+
+json_escape() {
+    local s="$*"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+# Send a raw JSON payload, print the data field on success, exit 1 on error.
+achroma_send() {
+    local payload="$1"
+    printf '%s\n' "$payload" | nc -U "$SOCKET" | python3 -c '
+import json, sys
+raw = sys.stdin.read().strip()
+if not raw:
+    print("achroma-cli: no response from server", file=sys.stderr)
+    sys.exit(1)
+try:
+    r = json.loads(raw)
+except Exception:
+    print(raw)
+    sys.exit(0)
+if r.get("ok"):
+    d = r.get("data")
+    if d is not None:
+        print(d)
+else:
+    print("achroma-cli: " + r.get("error", "unknown error"), file=sys.stderr)
+    sys.exit(1)
+'
+}
+
+usage() {
+    cat >&2 <<'EOF'
+Usage: achroma-cli <command> [args...]
+
+Navigation:
+  url                    Print current page URL
+  title                  Print current page title
+  open <url>             Navigate current tab to URL
+  tab  <url>             Open URL in new tab
+  back                   Go back
+  forward                Go forward
+  reload                 Reload current tab
+  search <query>         Search in current tab
+
+Browser control:
+  tabs                   List all open tabs
+  focus                  Focus the URL bar
+  execute <cmd>          Run any Achroma command (e.g. 'dark', 'zoom 150', 'reader')
+  detected_url           Print last URL detected in terminal output
+
+Scripting:
+  js <code>              Run JavaScript on the current page, print result
+  js -                   Read JavaScript from stdin, run it, print result
+  screenshot [file]      Capture viewport to PNG (default: /tmp/achroma-shot-N.png)
+  pipe                   Read stdin, display it as a browser tab
+  wait-for <pattern>     Block until current URL matches glob (env: ACHROMA_TIMEOUT=30)
+
+Examples:
+  achroma-cli js "document.title"
+  achroma-cli js "JSON.stringify([...document.querySelectorAll('h1')].map(h=>h.textContent))"
+  echo "document.body.innerText" | achroma-cli js -
+  achroma-cli screenshot | xargs xdg-open
+  cargo build 2>&1 | achroma-cli pipe
+  achroma-cli open "https://example.com/checkout" && achroma-cli wait-for "*/thank-you*"
+  achroma-cli js "document.body.innerText" | llm "summarize this page"
+EOF
+    exit 1
+}
+
+[ $# -lt 1 ] && usage
+[ -S "$SOCKET" ] || die "Achroma is not running (socket not found: $SOCKET)"
+
+CMD="$1"; shift
+ARG="$*"
+
+# --- Special pre-send handling ---
+
+# js: read code from stdin when arg is "-" or stdin is piped
+if [ "$CMD" = "js" ]; then
+    if [ "$ARG" = "-" ] || { [ -z "$ARG" ] && ! [ -t 0 ]; }; then
+        ARG=$(cat)
+        [ -n "$ARG" ] || die "js: no code provided on stdin"
+    fi
+    [ -n "$ARG" ] || die "js: provide code as argument or pipe from stdin (achroma-cli js -)"
+fi
+
+# pipe: read all stdin, strip ANSI codes, send as content to display in a tab
+if [ "$CMD" = "pipe" ]; then
+    ARG=$(cat | python3 -c '
+import sys, re
+content = sys.stdin.read()
+content = re.sub(r"\x1b\[[0-9;]*[mGKHFJKM]", "", content)
+sys.stdout.write(content)
+')
+    [ -n "$ARG" ] || die "pipe: no input on stdin"
+fi
+
+# wait-for: poll current URL against a glob pattern
+if [ "$CMD" = "wait-for" ]; then
+    PATTERN="$ARG"
+    [ -n "$PATTERN" ] || die "wait-for: provide a URL glob pattern (e.g. '*/success*')"
+    MAX="${ACHROMA_TIMEOUT:-30}"
+    i=0
+    while [ "$i" -lt "$MAX" ]; do
+        CURRENT=$(achroma_send '{"cmd":"url"}' 2>/dev/null)
+        case "$CURRENT" in
+            $PATTERN) echo "$CURRENT"; exit 0 ;;
+        esac
+        sleep 1
+        i=$((i + 1))
+    done
+    die "wait-for: timeout after ${MAX}s waiting for '$PATTERN'"
+fi
+
+# --- Build and send the JSON payload ---
+
+CMD_ESC=$(json_escape "$CMD")
+ARG_ESC=$(json_escape "$ARG")
+
+if [ -n "$ARG" ]; then
+    PAYLOAD=$(printf '{"cmd":"%s","arg":"%s"}' "$CMD_ESC" "$ARG_ESC")
+else
+    PAYLOAD=$(printf '{"cmd":"%s"}' "$CMD_ESC")
+fi
+
+achroma_send "$PAYLOAD"
