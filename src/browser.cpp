@@ -1089,9 +1089,13 @@ void BrowserTabs::toggleDarkMode()
     {
         QWebEngineView* v = qobject_cast<QWebEngineView*>(m_tabs->widget(i));
         if (v)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
             v->settings()->setAttribute(QWebEngineSettings::ForceDarkMode, m_darkModeEnabled);
+#endif
     }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
     QWebEngineProfile::defaultProfile()->settings()->setAttribute(QWebEngineSettings::ForceDarkMode, m_darkModeEnabled);
+#endif
 }
 
 void BrowserTabs::updateLockIcon(const QUrl& url)
