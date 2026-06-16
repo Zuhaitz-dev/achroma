@@ -18,10 +18,13 @@
 
 ```bash
 # Fedora
-dnf install qt6-qtbase-devel qt6-qtwebengine-devel qtermwidget6-devel cmake gcc-c++
+dnf install qt6-qtbase-devel qt6-qtwebengine-devel qtermwidget-devel cmake gcc-c++
 
-# Ubuntu / Debian
-apt install qt6-base-dev qt6-webengine-dev libqtermwidget6-2-dev cmake g++
+# Ubuntu (qtermwidget6 must be built from source)
+apt install qt6-base-dev qt6-webengine-dev cmake g++ git libutf8proc-dev liblz4-dev
+git clone --depth 1 https://github.com/lxqt/qtermwidget.git /tmp/qtermwidget
+cmake -B /tmp/qtermwidget/build -S /tmp/qtermwidget -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DQTERMWIDGET_USE_UTEMPTER=OFF
+sudo cmake --build /tmp/qtermwidget/build --target install -j$(nproc)
 
 # Build
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -51,9 +54,9 @@ make -C build -j$(nproc)
 | Integrated terminal | Real-time output triggers, zoom, search, profile switching |
 | Vim keys | `j` `k` `d` `u` `G` `gg` scrolling, link hints (Vimium-style) |
 | Command system | `:open`, `:tab`, `:search`, `:hint`, `:bookmark`, `:session`, and more |
-| Fuzzy finder | `Ctrl+Shift+P` — files, tabs, bookmarks, history, commands |
+| Fuzzy finder | `Ctrl+Shift+P` filer: files, tabs, bookmarks, history, commands |
 | Ad blocking | EasyList-style domain blocklist (`~/.config/achroma/blocklist.txt`) |
-| IPC control | Unix socket — `achroma-cli` from any terminal |
+| IPC control | Unix socket, `achroma-cli` from any terminal |
 | Configurable | Colors, fonts, keybindings, search engines, CSS themes |
 
 ---
@@ -132,7 +135,7 @@ chmod +x linuxdeploy-x86_64.AppImage
 }
 ```
 
-Hot-reloaded on save — no restart needed.
+Hot-reloaded on save, no restart needed.
 
 ---
 
@@ -205,8 +208,8 @@ Type `:command` in the URL bar, or prefix with `:` in the terminal.
 | `Ctrl+Shift+L` | Focus URL bar |
 | `Ctrl+O` | Toggle split orientation |
 | `Ctrl+Return` | Open URL bar content in new tab |
-| `Ctrl+1`–`9` | Switch to tab 1–9 |
-| `Ctrl+Shift+1`–`9` | Switch to tab 1–9 |
+| `Ctrl+1`-`9` | Switch to tab 1-9 |
+| `Ctrl+Shift+1`-`9` | Switch to tab 1-9 |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
 | `Ctrl+Shift+U` | Reopen closed tab |
 | `Ctrl+Shift+T` | Copy page selection to terminal |

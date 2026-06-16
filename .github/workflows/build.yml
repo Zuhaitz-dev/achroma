@@ -12,13 +12,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             cmake g++ xvfb \
             qt6-base-dev qt6-webengine-dev \
-            libqtermwidget6-2-dev
+            libutf8proc-dev liblz4-dev
+
+      - name: Build qtermwidget6 from source
+        run: |
+          git clone --depth 1 https://github.com/lxqt/qtermwidget.git /tmp/qtermwidget
+          cmake -B /tmp/qtermwidget/build -S /tmp/qtermwidget \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DQTERMWIDGET_USE_UTEMPTER=OFF
+          cmake --build /tmp/qtermwidget/build -j$(nproc)
+          sudo cmake --install /tmp/qtermwidget/build
 
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
@@ -40,12 +48,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           dnf install -y \
-            cmake gcc-c++ xorg-x11-server-Xvfb \
+            cmake gcc-c++ git xorg-x11-server-Xvfb \
             qt6-qtbase-devel qt6-qtwebengine-devel \
-            qtermwidget6-devel \
+            qtermwidget-devel \
             make
 
       - name: Configure
@@ -63,13 +71,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             cmake g++ xvfb \
             qt6-base-dev qt6-webengine-dev \
-            libqtermwidget6-2-dev
+            libutf8proc-dev liblz4-dev
+
+      - name: Build qtermwidget6 from source
+        run: |
+          git clone --depth 1 https://github.com/lxqt/qtermwidget.git /tmp/qtermwidget
+          cmake -B /tmp/qtermwidget/build -S /tmp/qtermwidget \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DQTERMWIDGET_USE_UTEMPTER=OFF
+          cmake --build /tmp/qtermwidget/build -j$(nproc)
+          sudo cmake --install /tmp/qtermwidget/build
 
       - name: Configure (ASan+UBSan)
         run: cmake -B build/asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON -DENABLE_UBSAN=ON -DBUILD_TESTS=ON
