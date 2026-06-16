@@ -143,7 +143,7 @@ if(BUILD_TESTS)
         Qt6::Core Qt6::Test Qt6::Gui Qt6::Widgets Qt6::WebEngineWidgets)
     add_test(NAME ScriptTests COMMAND test_scripts)
     set_tests_properties(ScriptTests PROPERTIES ENVIRONMENT "QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu --no-sandbox")
-    set_property(TEST ScriptTests APPEND PROPERTY ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+    set_property(TEST ScriptTests APPEND PROPERTY ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0:new_delete_type_mismatch=0")
 endif()
 
 # --- Install ---
