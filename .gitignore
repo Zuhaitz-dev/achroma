@@ -1,0 +1,52 @@
+# Build directories
+build/
+build-*/
+tmp/
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+cmake_uninstall.cmake
+CTestTestfile.cmake
+install_manifest.txt
+*.qrc.depends
+Testing/
+
+# Compiled objects and binaries
+*.o
+*.obj
+*.so
+*.a
+*.exe
+Achroma
+achroma_test
+test_adblock
+test_commands
+test_scripts
+
+# Qt generated files
+*_autogen/
+mocs_compilation.cpp
+qrc_*.cpp
+*.moc
+
+# Tooling
+compile_commands.json
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AppImage / packaging artifacts
+AppDir/
+*.AppImage
+.qt/
