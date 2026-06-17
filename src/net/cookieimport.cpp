@@ -11,7 +11,6 @@
 #include <QSqlQuery>
 #include <QStandardPaths>
 #include <QTextStream>
-#include <QTimeZone>
 #include <QUrl>
 #include <QWebEngineCookieStore>
 #include <QWebEngineProfile>
@@ -197,9 +196,9 @@ int CookieImporter::importFromDb(
             if (ok && ts > 0)
             {
                 if (firefoxStyle)
-                    expiry = QDateTime::fromSecsSinceEpoch(ts, QTimeZone::UTC);
+                    expiry = QDateTime::fromSecsSinceEpoch(ts, Qt::UTC);
                 else
-                    expiry = QDateTime::fromMSecsSinceEpoch((ts / 1000) - 11644473600000, QTimeZone::UTC);
+                    expiry = QDateTime::fromMSecsSinceEpoch((ts / 1000) - 11644473600000, Qt::UTC);
             }
 
             const bool secure = q.value(5).toInt() != 0;
@@ -316,7 +315,7 @@ int CookieImporter::importFromNetscapeFile(QWebEngineProfile* profile, const QSt
         cookie.setHttpOnly(httpOnly);
         QDateTime expiry;
         if (ok && expirySecs > 0)
-            expiry = QDateTime::fromSecsSinceEpoch(expirySecs, QTimeZone::UTC);
+            expiry = QDateTime::fromSecsSinceEpoch(expirySecs, Qt::UTC);
         if (isExpired(expiry))
             continue;
         cookie.setExpirationDate(expiry.isValid() ? expiry : durableImportExpiration());

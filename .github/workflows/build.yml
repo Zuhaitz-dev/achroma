@@ -12,15 +12,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ubuntu-ccache-${{ github.sha }}
+          restore-keys: ubuntu-ccache-
+
+      - name: Restore qtermwidget
+        id: cache-qtw
+        uses: actions/cache@v4
+        with:
+          path: /tmp/qtermwidget
+          key: ubuntu-qtermwidget-${{ hashFiles('.github/workflows/build.yml') }}
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            cmake g++ xvfb \
+            cmake g++ xvfb ccache \
             qt6-base-dev qt6-webengine-dev \
             libutf8proc-dev liblz4-dev
 
       - name: Build qtermwidget6 from source
+        if: steps.cache-qtw.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 https://github.com/lxqt/qtermwidget.git /tmp/qtermwidget
           sed -i 's/set(QT_MINIMUM_VERSION "6.6.0")/set(QT_MINIMUM_VERSION "6.4.0")/' /tmp/qtermwidget/CMakeLists.txt
@@ -37,7 +52,7 @@ jobs:
           sudo cmake --install /tmp/qtermwidget/build
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
+        run: cmake -B build -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build -j$(nproc)
@@ -56,16 +71,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: fedora-ccache-${{ github.sha }}
+          restore-keys: fedora-ccache-
+
       - name: Install system dependencies
         run: |
           dnf install -y \
-            cmake gcc-c++ git xorg-x11-server-Xvfb \
+            cmake gcc-c++ git xorg-x11-server-Xvfb ccache \
             qt6-qtbase-devel qt6-qtwebengine-devel \
             qtermwidget-devel \
             make
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
+        run: cmake -B build -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build -j$(nproc)
@@ -79,15 +101,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: sanitize-ccache-${{ github.sha }}
+          restore-keys: sanitize-ccache-
+
+      - name: Restore qtermwidget
+        id: cache-qtw-san
+        uses: actions/cache@v4
+        with:
+          path: /tmp/qtermwidget
+          key: ubuntu-qtermwidget-${{ hashFiles('.github/workflows/build.yml') }}
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            cmake g++ xvfb \
+            cmake g++ xvfb ccache \
             qt6-base-dev qt6-webengine-dev \
             libutf8proc-dev liblz4-dev
 
       - name: Build qtermwidget6 from source
+        if: steps.cache-qtw-san.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 https://github.com/lxqt/qtermwidget.git /tmp/qtermwidget
           sed -i 's/set(QT_MINIMUM_VERSION "6.6.0")/set(QT_MINIMUM_VERSION "6.4.0")/' /tmp/qtermwidget/CMakeLists.txt
@@ -104,7 +141,7 @@ jobs:
           sudo cmake --install /tmp/qtermwidget/build
 
       - name: Configure (ASan+UBSan)
-        run: cmake -B build/asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON -DENABLE_UBSAN=ON -DBUILD_TESTS=ON
+        run: cmake -B build/asan -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON -DENABLE_UBSAN=ON -DBUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build/asan -j$(nproc)
